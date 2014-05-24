@@ -6,6 +6,8 @@ describe Api::V1::ArchitecturesController do
 
     it "should be version 1.0" do
       subject._version.should eq('1.0')
+      subject._formats.should include('json')
+      subject._errors_args.should include([404, "Resource not found", {}])
 
       Apipie.resource_descriptions['1.0'].size.should == 2
       Apipie.resource_descriptions['1.0'].keys.should

@@ -5,6 +5,8 @@ module Api
         api_version '1.0'
         app_info 'Version 1.0 description'
         api_base_url '/api/v1'
+        formats ['json']
+        error 404, "Resource not found"
       end
     end
   end

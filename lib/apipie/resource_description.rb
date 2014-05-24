@@ -53,6 +53,22 @@ module Apipie
       @_api_base_url || @_parent.try(:_api_base_url) || Apipie.api_base_url(_version)
     end
 
+    def _formats
+      @_formats || @_parent.try(:_formats) || []
+    end
+
+    def _errors_args
+      if @_errors_args.length > 0 then @_errors_args else @_parent.try(:_errors_args) || [] end
+    end
+
+    def _full_description
+      @_full_description || @_parent.try(:_full_description)
+    end
+
+    def _short_description
+      @_short_description || @_parent.try(:_short_description)
+    end
+
     def add_method_description(method_description)
       Apipie.debug "@resource_descriptions[#{self._version}][#{self._name}]._methods[#{method_description.method}] = #{method_description}"
       @_methods[method_description.method.to_sym] = method_description
@@ -93,11 +109,12 @@ module Apipie
         :doc_url => doc_url,
         :api_url => api_url,
         :name => @_name,
-        :short_description => Apipie.app.translate(@_short_description, lang),
-        :full_description => Apipie.app.translate(@_full_description, lang),
+        :short_description => Apipie.app.translate(_short_description, lang),
+        :full_description => Apipie.app.translate(_full_description, lang),
         :version => _version,
-        :formats => @_formats,
-        :metadata => @_metadata,
+        :formats => _formats,
+        :errors_args => _errors_args,
+        :metadata => _metadata,
         :methods => methods
       }
     end
