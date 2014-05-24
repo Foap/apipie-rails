@@ -228,7 +228,6 @@ module Apipie
       else
         [@resource_descriptions[version][resource_name].to_json(method_name, lang)]
       end
-
       url_args = Apipie.configuration.version_in_url ? version : ''
 
       {
