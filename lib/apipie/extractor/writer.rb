@@ -72,6 +72,18 @@ module Apipie
         "#{description[:controller].name}##{description[:action]}"
       end
 
+      def handle_rack_uploaded_file(request)
+        request.each_with_object({}) do |(k,v), h|
+          if v.kind_of?(Rack::Test::UploadedFile)
+            h[k] = v.to_json
+          elsif v.kind_of?(Hash)
+            h[k] = handle_rack_uploaded_file(v)
+          else
+            h[k] = v
+          end
+        end
+      end
+
       def ordered_call(call)
         call = call.stringify_keys
         ordered_call = OrderedHash.new
@@ -79,7 +91,13 @@ module Apipie
           next unless call.has_key?(k)
           ordered_call[k] = case call[k]
                        when ActiveSupport::HashWithIndifferentAccess
-                         JSON.parse(call[k].to_json) # to_hash doesn't work recursively and I'm too lazy to write the recursion:)
+                        begin
+                          JSON.parse(call[k].to_json) # to_hash doesn't work recursively and I'm too lazy to write the recursion:)
+                        rescue Encoding::UndefinedConversionError => error
+                          if error.to_s.match('ASCII-8BIT') # binary object, RackFile, not so json anymore.
+                            JSON.parse(handle_rack_uploaded_file(call[k]).to_json)
+                          end
+                        end
                        else
                          call[k]
                        end
