@@ -1,4 +1,5 @@
 require 'apipie/static_dispatcher'
+require 'apipie/routes_formatter'
 require 'yaml'
 require 'digest/md5'
 require 'json'
@@ -6,11 +7,10 @@ require 'json'
 module Apipie
 
   class Application
-
     # we need engine just for serving static assets
     class Engine < Rails::Engine
-      initializer "static assets" do |app|
-        app.middleware.use ::Apipie::StaticDispatcher, "#{root}/app/public", Apipie.configuration.doc_base_url
+      initializer "static assets", :before => :build_middleware_stack do |app|
+        app.middleware.use ::Apipie::StaticDispatcher, "#{root}/app/public"
       end
     end
 
@@ -27,6 +27,50 @@ module Apipie
 
     def set_resource_id(controller, resource_id)
       @controller_to_resource_id[controller] = resource_id
+    end
+
+    def rails_routes(route_set = nil)
+      if route_set.nil? && @rails_routes
+        return @rails_routes
+      end
+      route_set ||= Rails.application.routes
+      # ensure routes are loaded
+      Rails.application.reload_routes! unless Rails.application.routes.routes.any?
+
+      flatten_routes = []
+
+      route_set.routes.each do |route|
+        if route.app.respond_to?(:routes) && route.app.routes.is_a?(ActionDispatch::Routing::RouteSet)
+          # recursively go though the moutned engines
+          flatten_routes.concat(rails_routes(route.app.routes))
+        else
+          flatten_routes << route
+        end
+      end
+
+      @rails_routes = flatten_routes
+    end
+
+    # the app might be nested when using contraints, namespaces etc.
+    # this method does in depth search for the route controller
+    def route_app_controller(app, route, visited_apps = [])
+      visited_apps << app
+      if app.respond_to?(:controller)
+        return app.controller(route.defaults)
+      elsif app.respond_to?(:app) && !visited_apps.include?(app.app)
+        return route_app_controller(app.app, route, visited_apps)
+      end
+    rescue ActionController::RoutingError
+      # some errors in the routes will not stop us here: just ignoring
+    end
+
+    def routes_for_action(controller, method, args)
+      routes = rails_routes.select do |route|
+        controller == route_app_controller(route.app, route) &&
+            method.to_s == route.defaults[:action]
+      end
+
+      Apipie.configuration.routes_formatter.format_routes(routes, args)
     end
 
     # create new method api description
@@ -261,6 +305,13 @@ module Apipie
       locale = old_locale
     end
 
+    def load_documentation
+      if !@documentation_loaded || Apipie.configuration.reload_controllers?
+        Apipie.reload_documentation
+        @documentation_loaded = true
+      end
+    end
+
     def compute_checksum
       if Apipie.configuration.use_cache?
         file_base = File.join(Apipie.configuration.cache_dir, Apipie.configuration.doc_base_url)
@@ -269,7 +320,7 @@ module Apipie
           all_docs[File.basename(f, '.json')] = JSON.parse(File.read(f))
         end
       else
-        reload_documentation if available_versions == []
+        load_documentation if available_versions == []
         all_docs = Apipie.available_versions.inject({}) do |all, version|
           all.update(version => Apipie.to_json(version))
         end
