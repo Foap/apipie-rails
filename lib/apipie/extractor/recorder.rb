@@ -1,6 +1,8 @@
 module Apipie
   module Extractor
     class Recorder
+      MULTIPART_BOUNDARY = 'APIPIE_RECORDER_EXAMPLE_BOUNDARY'
+
       def initialize
         @ignored_params = [:controller, :action]
       end
@@ -14,6 +16,8 @@ module Apipie
         if data = parse_data(env["rack.input"].read)
           @request_data = data
           env["rack.input"].rewind
+        elsif form_hash = env["rack.request.form_hash"]
+          @request_data = reformat_multipart_data(form_hash)
         end
       end
 
@@ -34,7 +38,7 @@ module Apipie
         @verb = request.request_method.to_sym
         @path = request.path
         @params = request.request_parameters
-        if [:POST, :PUT].include?(@verb)
+        if [:POST, :PUT, :PATCH].include?(@verb)
           @request_data = @params
         else
           @query = request.query_string
@@ -48,6 +52,37 @@ module Apipie
         JSON.parse(data)
       rescue StandardError => e
         data
+      end
+
+      def reformat_multipart_data(form)
+        form.empty? and return ''
+        lines = ["Content-Type: multipart/form-data; boundary=#{MULTIPART_BOUNDARY}",'']
+        boundary = "--#{MULTIPART_BOUNDARY}"
+        form.each do |key, attrs|
+          if attrs.is_a?(String)
+            lines << boundary << content_disposition(key) << "Content-Length: #{attrs.size}" << '' << attrs
+          else
+            reformat_hash(boundary, attrs, lines)
+          end
+        end
+        lines << "#{boundary}--"
+        lines.join("\n")
+      end
+
+      def reformat_hash(boundary, attrs, lines)
+        if head = attrs[:head]
+          lines << boundary
+          lines.concat(head.split("\r\n"))
+          # To avoid large and/or binary file bodies, simply indicate the contents in the output.
+          lines << '' << %{... contents of "#{attrs[:name]}" ...}
+        else
+          # Look for subelements that contain a part.
+          attrs.each { |k,v| v.is_a?(Hash) and reformat_hash(boundary, v, lines) }
+        end
+      end
+
+      def content_disposition(name)
+        %{Content-Disposition: form-data; name="#{name}"}
       end
 
       def reformat_data(data)

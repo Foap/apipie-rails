@@ -5,25 +5,25 @@ module Apipie
 
     class Api
 
-      attr_accessor :short_description, :path, :http_method, :options
+      attr_accessor :short_description, :path, :http_method, :from_routes, :options
 
       def initialize(method, path, desc, options)
         @http_method = method.to_s
         @path = path
         @short_description = desc
+        @from_routes = options[:from_routes]
         @options = options
       end
 
     end
 
-    attr_reader :full_description, :method, :resource, :apis, :examples, :see, :formats, :metadata
+    attr_reader :full_description, :method, :resource, :apis, :examples, :see, :formats, :metadata, :headers
 
     def initialize(method, resource, dsl_data)
       @method = method.to_s
       @resource = resource
       @from_concern = dsl_data[:from_concern]
-
-      @apis = dsl_data[:api_args].map do |mthd, path, desc, opts|
+      @apis = api_data(dsl_data).map do |mthd, path, desc, opts|
         MethodDescription::Api.new(mthd, concern_subst(path), concern_subst(desc), opts)
       end
 
@@ -48,6 +48,7 @@ module Apipie
         Apipie::ParamDescription.from_dsl_data(self, args)
       end
       @params_ordered = ParamDescription.unify(@params_ordered)
+      @headers = dsl_data[:headers]
     end
 
     def id
@@ -104,7 +105,10 @@ module Apipie
     end
 
     def create_api_url(api)
-      path = "#{@resource._api_base_url}#{api.path}"
+      path = api.path
+      unless api.from_routes
+        path = "#{@resource._api_base_url}#{path}"
+      end
       path = path[0..-2] if path[-1..-1] == '/'
       return path
     end
@@ -139,7 +143,8 @@ module Apipie
         :params => params_ordered.map{ |param| param.to_json(lang) }.flatten,
         :examples => @examples,
         :metadata => @metadata,
-        :see => see.map(&:to_json)
+        :see => see.map(&:to_json),
+        :headers => headers
       }
     end
 
@@ -149,6 +154,23 @@ module Apipie
     end
 
     private
+
+    def api_data(dsl_data)
+      ret = dsl_data[:api_args].dup
+      if dsl_data[:api_from_routes]
+        desc = dsl_data[:api_from_routes][:desc]
+        options = dsl_data[:api_from_routes][:options]
+
+        api_from_routes = Apipie.routes_for_action(resource.controller, method, {:desc => desc, :options => options}).map do |route_info|
+          [route_info[:verb],
+           route_info[:path],
+           route_info[:desc],
+           (route_info[:options] || {}).merge(:from_routes => true)]
+        end
+        ret.concat(api_from_routes)
+      end
+      ret
+    end
 
     def merge_params(params, new_params)
       new_param_names = Set.new(new_params.map(&:name))
@@ -174,7 +196,9 @@ module Apipie
     end
 
     def format_example(ex)
-      example = "#{ex[:verb]} #{ex[:path]}"
+      example = ""
+      example << "// #{ex[:title]}\n" if ex[:title].present?
+      example << "#{ex[:verb]} #{ex[:path]}"
       example << "?#{ex[:query]}" unless ex[:query].blank?
       example << "\n" << format_example_data(ex[:request_data]).to_s if ex[:request_data]
       example << "\n" << ex[:code].to_s

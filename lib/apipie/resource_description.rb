@@ -9,10 +9,12 @@ module Apipie
   # name - human readable alias of resource (Articles)
   # id - resouce name
   # formats - acceptable request/response format types
+  # headers - array of headers
   class ResourceDescription
 
     attr_reader :controller, :_short_description, :_full_description, :_methods, :_id,
-      :_path, :_name, :_params_args, :_errors_args, :_formats, :_parent, :_metadata
+      :_path, :_name, :_params_args, :_errors_args, :_formats, :_parent, :_metadata,
+      :_headers
 
     def initialize(controller, resource_name, dsl_data = nil, version = nil, &block)
 
@@ -39,6 +41,7 @@ module Apipie
       @_params_args = dsl_data[:params]
       @_metadata = dsl_data[:meta]
       @_api_base_url = dsl_data[:api_base_url]
+      @_headers = dsl_data[:headers]
 
       if dsl_data[:app_info]
         Apipie.configuration.app_info[_version] = dsl_data[:app_info]
@@ -53,12 +56,16 @@ module Apipie
       @_api_base_url || @_parent.try(:_api_base_url) || Apipie.api_base_url(_version)
     end
 
-    def _formats
-      @_formats || @_parent.try(:_formats) || []
+    def _errors_args
+      if @_errors_args.length > 0 then
+        @_errors_args
+      else
+        @_parent.try(:_errors_args) || []
+      end
     end
 
-    def _errors_args
-      if @_errors_args.length > 0 then @_errors_args else @_parent.try(:_errors_args) || [] end
+    def _formats
+      @_formats || @_parent.try(:_formats) || []
     end
 
     def _full_description
@@ -120,9 +127,9 @@ module Apipie
         :full_description => Apipie.app.translate(_full_description, lang),
         :version => _version,
         :formats => _formats,
-        :errors_args => _errors_args,
-        :metadata => _metadata,
-        :methods => methods
+        :metadata => @_metadata,
+        :methods => methods,
+        :headers => @_headers
       }
     end
 
