@@ -159,6 +159,9 @@ module Apipie
         ensure
           Apipie::Extractor.clean_call_recorder
         end
+        # Keep `get :show, params: ...` keywords intact on Ruby 3 when forwarding to the
+        # original ActionController::TestCase#process.
+        ruby2_keywords(:process_with_api_recording) if respond_to?(:ruby2_keywords, true)
       end
     end
   end

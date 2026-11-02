@@ -46,7 +46,7 @@ module Apipie
 
       def self.load_recorded_examples
         examples_file = self.examples_file
-        if File.exists?(examples_file)
+        if File.exist?(examples_file)
           return load_json_examples
         end
         return {}
@@ -170,7 +170,7 @@ module Apipie
       end
 
       def load_old_examples
-        if File.exists?(@examples_file)
+        if File.exist?(@examples_file)
           if defined? SafeYAML
             return YAML.load_file(@examples_file, :safe=>false)
           else
@@ -279,7 +279,7 @@ module Apipie
       end
 
       def controller_content
-        raise ControllerNotFound.new unless controller_path && File.exists?(controller_path)
+        raise ControllerNotFound.new unless controller_path && File.exist?(controller_path)
         @controller_content ||= File.read(controller_path)
       end
 
